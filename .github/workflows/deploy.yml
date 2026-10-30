@@ -49,6 +49,8 @@ jobs:
           # Publishable key: safe to expose in the browser bundle.
           VITE_SUPABASE_URL: https://dbuzljugpusakqktraxc.supabase.co
           VITE_SUPABASE_ANON_KEY: sb_publishable_EmVr3IpIe5LX6_wk1-26NA_AbQypdzg
+          # 식품안전나라 공공데이터 키. "sample"은 테스트용입니다.
+          VITE_FOODSAFETY_API_KEY: sample
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

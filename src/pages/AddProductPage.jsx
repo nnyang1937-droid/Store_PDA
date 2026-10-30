@@ -12,6 +12,7 @@ import {
   isValidCalendarDate,
   parseExpiryInput,
 } from '../lib/date';
+import { lookupFoodSafetyProduct } from '../lib/foodsafety';
 import { categoryTable, listTable, supabase } from '../lib/supabase';
 import { useAppStore } from '../store/useAppStore';
 import { toast } from '../store/useToastStore';
@@ -33,21 +34,72 @@ export default function AddProductPage() {
   const [scanError, setScanError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [manualError, setManualError] = useState(null);
+  const [manualValue, setManualValue] = useState('');
   const [imageDecoding, setImageDecoding] = useState(false);
   const [imageError, setImageError] = useState(null);
+  const [productName, setProductName] = useState('');
+  const [lookupStatus, setLookupStatus] = useState('idle');
+  const [lookupResult, setLookupResult] = useState(null);
+  const [lookupError, setLookupError] = useState(null);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const controlsRef = useRef(null);
   const sessionRef = useRef(0);
+  const lookupRequestRef = useRef(0);
 
   const applyBarcode = useCallback((value) => {
+    const requestId = ++lookupRequestRef.current;
+
     setBarcode(value);
+    setProductName(value);
+    setLookupStatus('loading');
+    setLookupResult(null);
+    setLookupError(null);
+
     try {
       setBarcodeImage(createBarcodeImage(value));
     } catch {
       setBarcodeImage(null);
     }
+
+    lookupFoodSafetyProduct(value)
+      .then((result) => {
+        if (lookupRequestRef.current !== requestId) {
+          return;
+        }
+
+        if (result && result.name) {
+          setProductName(result.name);
+          setLookupResult(result);
+          setLookupStatus('found');
+        } else {
+          setLookupStatus('not_found');
+        }
+      })
+      .catch((error) => {
+        if (lookupRequestRef.current !== requestId) {
+          return;
+        }
+
+        console.error('[foodsafety lookup]', error);
+        setLookupStatus('error');
+        setLookupError(error.message || null);
+      });
+  }, []);
+
+  const clearBarcode = useCallback(() => {
+    lookupRequestRef.current += 1;
+    setBarcode(null);
+    setBarcodeImage(null);
+    setProductName('');
+    setLookupStatus('idle');
+    setLookupResult(null);
+    setLookupError(null);
+    setManualValue('');
+    setManualError(null);
+    setImageError(null);
+    setScanError(null);
   }, []);
 
   const stopCamera = useCallback(() => {
@@ -181,6 +233,12 @@ export default function AddProductPage() {
   }, [mode, barcode, startCamera, stopCamera]);
 
   useEffect(() => {
+    return () => {
+      lookupRequestRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!storeKey) {
       navigate('/', { replace: true });
       return;
@@ -235,12 +293,15 @@ export default function AddProductPage() {
   };
 
   const handleManualChange = (value) => {
-    const trimmed = value.trim();
+    setManualValue(value.replace(/[^\d]/g, '').slice(0, 13));
     setManualError(null);
+  };
+
+  const handleManualSubmit = () => {
+    const trimmed = manualValue.trim();
 
     if (!trimmed) {
-      setBarcode(null);
-      setBarcodeImage(null);
+      setManualError('바코드 숫자를 입력하세요.');
       return;
     }
 
@@ -251,6 +312,7 @@ export default function AddProductPage() {
       return;
     }
 
+    setManualError(null);
     applyBarcode(trimmed);
   };
 
@@ -286,11 +348,17 @@ export default function AddProductPage() {
   };
 
   const resetForm = () => {
+    lookupRequestRef.current += 1;
     setBarcode(null);
     setBarcodeImage(null);
+    setProductName('');
+    setLookupStatus('idle');
+    setLookupResult(null);
+    setLookupError(null);
     setExpiryDate('');
     setExpiryInput(String(new Date().getFullYear()));
     setExpiryError(null);
+    setManualValue('');
     setManualError(null);
     setImageError(null);
     setScanError(null);
@@ -325,11 +393,15 @@ export default function AddProductPage() {
         store_key: storeKey,
         barcode,
         barcode_image_url: barcodeImage,
-        product_name: barcode,
+        product_name: productName.trim() || barcode,
         product_image_url: null,
         expiry_date: expiryDate,
         category_id: categoryId || null,
-        memo: null,
+        memo: lookupResult
+          ? [lookupResult.manufacturer, lookupResult.foodType, lookupResult.shelfLife]
+              .filter(Boolean)
+              .join(' / ') || null
+          : null,
       });
 
       if (error) {
@@ -376,8 +448,7 @@ export default function AddProductPage() {
                 type="button"
                 onClick={() => {
                   setMode('scan');
-                  setBarcode(null);
-                  setBarcodeImage(null);
+                  clearBarcode();
                 }}
                 className={`px-3 py-1 rounded-md font-medium ${
                   mode === 'scan'
@@ -391,7 +462,7 @@ export default function AddProductPage() {
                 type="button"
                 onClick={() => {
                   setMode('manual');
-                  stopCamera();
+                  clearBarcode();
                 }}
                 className={`px-3 py-1 rounded-md font-medium ${
                   mode === 'manual'
@@ -416,10 +487,7 @@ export default function AddProductPage() {
               <div className="font-mono text-lg mt-1">{barcode}</div>
               <button
                 type="button"
-                onClick={() => {
-                  setBarcode(null);
-                  setBarcodeImage(null);
-                }}
+                onClick={clearBarcode}
                 className="text-xs text-brand-600 mt-1"
               >
                 다시 입력
@@ -489,15 +557,31 @@ export default function AddProductPage() {
             </div>
           ) : (
             <div>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={13}
-                className="input font-mono text-center text-lg tracking-wider"
-                placeholder="13자리 또는 8자리 숫자"
-                onChange={(event) => handleManualChange(event.target.value)}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={13}
+                  className="input flex-1 font-mono text-center text-lg tracking-wider"
+                  placeholder="13자리 또는 8자리 숫자"
+                  value={manualValue}
+                  onChange={(event) => handleManualChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      handleManualSubmit();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleManualSubmit}
+                  className="btn-secondary"
+                >
+                  조회
+                </button>
+              </div>
               {manualError && (
                 <div className="text-xs text-red-600 mt-2">{manualError}</div>
               )}
@@ -507,6 +591,56 @@ export default function AddProductPage() {
             </div>
           )}
         </div>
+
+        {barcode && (
+          <div className="card space-y-3">
+            <div>
+              <label className="label" htmlFor="product-name">
+                상품명
+              </label>
+              <input
+                id="product-name"
+                type="text"
+                className="input"
+                value={productName}
+                onChange={(event) => setProductName(event.target.value)}
+                placeholder="상품명을 입력하세요"
+                disabled={lookupStatus === 'loading'}
+              />
+            </div>
+
+            {lookupStatus === 'loading' && (
+              <div className="text-xs text-gray-500">
+                식품안전나라에서 상품 정보를 조회 중...
+              </div>
+            )}
+
+            {lookupStatus === 'found' && lookupResult && (
+              <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-700 space-y-2">
+                <div className="font-semibold text-green-700">
+                  식품안전나라 조회 결과
+                </div>
+                <div>제조사: {lookupResult.manufacturer || '-'}</div>
+                <div>식품 유형: {lookupResult.foodType || '-'}</div>
+                <div>소비기한: {lookupResult.shelfLife || '-'}</div>
+              </div>
+            )}
+
+            {lookupStatus === 'not_found' && (
+              <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 ring-1 ring-red-200">
+                식품안전나라에서 조회되지 않는 상품입니다. 상품명을 직접
+                입력해주세요.
+              </div>
+            )}
+
+            {lookupStatus === 'error' && (
+              <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 ring-1 ring-red-200">
+                상품 정보 조회에 실패했습니다. 상품명을 직접 입력해주세요.
+                {lookupError ? ` (${lookupError})` : ''}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="card space-y-4">
           <div>

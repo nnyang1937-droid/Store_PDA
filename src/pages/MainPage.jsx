@@ -150,6 +150,10 @@ export default function MainPage() {
           {products.map((product) => {
             const status = getExpiryStatus(product.expiry_date);
             const days = daysUntil(product.expiry_date);
+            const displayName =
+              product.product_name && product.product_name !== product.barcode
+                ? product.product_name
+                : product.barcode;
 
             return (
               <li key={product.id}>
@@ -175,13 +179,19 @@ export default function MainPage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="font-semibold text-gray-900 truncate font-mono">
-                          {product.barcode}
+                        <div className="font-semibold text-gray-900 truncate">
+                          {displayName}
                         </div>
                         <div className="text-xs text-gray-500 flex-shrink-0">
                           {product.expiry_date}
                         </div>
                       </div>
+
+                      {displayName !== product.barcode && (
+                        <div className="text-xs text-gray-400 font-mono truncate">
+                          {product.barcode}
+                        </div>
+                      )}
 
                       <div className="mt-1.5">
                         {status === 'expired' && (

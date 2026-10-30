@@ -49,6 +49,7 @@ notepad .env
 ```env
 VITE_SUPABASE_URL=https://xxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_...
+VITE_FOODSAFETY_API_KEY=sample
 ```
 
 5. 실행:
@@ -86,6 +87,20 @@ Vercel에 배포할 때 `/main` 직접 접근이 404가 되지 않도록 `vercel
 넣어 두었습니다. Vercel Project Settings → Environment Variables에도
 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`를 같은 값으로 넣고 재배포하세요.
 Vite 환경 변수는 빌드 시점에 번들에 들어갑니다.
+
+## 바코드 상품정보 자동 조회
+
+바코드가 등록되면 **식품안전나라 바코드연계제품정보 API(C005)** 를 호출해 상품명, 제조사,
+식품 유형, 소비기한을 조회합니다.
+
+- 조회 성공: 상품명이 자동 입력되고 조회 결과가 표시됩니다.
+- 조회 실패: "식품안전나라에서 조회되지 않는 상품입니다" 안내가 뜨고 상품명을 직접
+  입력할 수 있습니다.
+- API 키: `VITE_FOODSAFETY_API_KEY`. 기본값 `sample`은 테스트용입니다. 실제 운영 시
+  https://www.foodsafetykorea.go.kr/api/ 에서 무료 인증키를 발급받아 `.env`,
+  GitHub Actions, Vercel 환경 변수에 넣으세요.
+- 식품만 조회됩니다. 데이터에 없는 신제품·수입품·비식품은 직접 입력해야 합니다.
+- 브라우저에서 직접 호출하며 CORS가 허용되어 있어 별도 백엔드가 필요 없습니다.
 
 ## GitHub Pages 배포
 
@@ -172,6 +187,7 @@ select cron.schedule('keepalive', '0 3 * * *', $$select 1$$);
 - React Router
 - Zustand (매장 선택 상태, 토스트)
 - Supabase JS
+- 식품안전나라 C005 Open API — 바코드 상품정보 조회
 - `@zxing/browser` — 카메라/이미지 바코드 인식 (EAN-13, EAN-8)
 - `jsbarcode` — 바코드 이미지 생성
 - Tailwind CSS 빌드 결과물(`src/index.css`)을 배포본에서 그대로 복원

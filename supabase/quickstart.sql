@@ -170,7 +170,7 @@ insert into public.seven01_list (
   product_image_url, expiry_date, category_id, memo
 )
 select
-  'seven01', '8801234567890', null, '8801234567890',
+  'seven01', '8801234567890', null, '나인멘즈햄버거용 치즈버거 소스',
   null, current_date + 30, c.id, '샘플: 여유'
 from public.seven01_category c
 where c.store_key = 'seven01'

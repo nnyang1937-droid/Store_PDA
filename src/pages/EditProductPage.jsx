@@ -17,6 +17,7 @@ export default function EditProductPage() {
   const [product, setProduct] = useState(null);
   const [barcode, setBarcode] = useState('');
   const [barcodeImage, setBarcodeImage] = useState(null);
+  const [productName, setProductName] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [expiryInput, setExpiryInput] = useState('');
   const [expiryError, setExpiryError] = useState(null);
@@ -55,6 +56,7 @@ export default function EditProductPage() {
         setProduct(productRow);
         setBarcode(productRow.barcode);
         setBarcodeImage(productRow.barcode_image_url);
+        setProductName(productRow.product_name || productRow.barcode || '');
         setExpiryDate(productRow.expiry_date);
         setExpiryInput(productRow.expiry_date.replace(/-/g, ''));
         setCategoryId(
@@ -123,7 +125,7 @@ export default function EditProductPage() {
         .update({
           barcode,
           barcode_image_url: barcodeImage,
-          product_name: barcode,
+          product_name: productName.trim() || barcode,
           expiry_date: expiryDate,
           category_id: categoryId || null,
         })
@@ -206,6 +208,20 @@ export default function EditProductPage() {
         </div>
 
         <div className="card space-y-4">
+          <div>
+            <label className="label" htmlFor="product-name">
+              상품명
+            </label>
+            <input
+              id="product-name"
+              type="text"
+              className="input"
+              value={productName}
+              onChange={(event) => setProductName(event.target.value)}
+              placeholder="상품명을 입력하세요"
+            />
+          </div>
+
           <div>
             <label className="label" htmlFor="expiry-date">
               유통기한 *
